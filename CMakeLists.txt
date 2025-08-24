@@ -5,7 +5,7 @@ project(pose_graph_slam)
 set(CMAKE_CXX_STANDARD 17)
 
 # Use -O3 Optimizations
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -33,6 +33,7 @@ find_package(g2o REQUIRED)
 
 include_directories(
     include
+    include/impl
     ${catkin_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
     ${Boost_INCLUDE_DIRS}
@@ -42,9 +43,6 @@ include_directories(
 )
 
 link_directories(${G2O_LIBRARY_DIRS})
-
-
-
 
 add_executable(poseGraphSlam src/poseGraphSlam.cpp)
 target_link_libraries(poseGraphSlam ${catkin_LIBRARIES} ${PCL_LIBRARIES}  
