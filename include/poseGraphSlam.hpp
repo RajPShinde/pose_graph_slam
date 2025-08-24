@@ -30,6 +30,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <laser_geometry/laser_geometry.h>
 #include <tf2_ros/transform_listener.h>
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 
 #include <iostream>
 #include <numeric>
@@ -49,11 +51,62 @@
 
 #include <pcl/point_cloud.h>
 #include <pcl/registration/icp.h>
+#include <pcl/registration/ndt.h>
+#include <transformation_estimation_2D.h>
 #include <pcl/filters/voxel_grid.h>
 
 #include <Eigen/Dense>
 
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/pcl_config.h>
+
+
+struct Pose{
+    double x;
+    double y;
+    double yaw;
+
+    Pose(){};
+    Pose(double a, double b, double c): x(a), y(b), yaw(c) {};
+
+    bool operator == (const Pose &p) const
+    {
+        return (x == p.x && y == p.y && yaw == p.yaw);
+    }
+
+    bool operator != (const Pose &p) const
+    {
+        return (x != p.x || y != p.y || yaw != p.yaw);
+    }
+};
+
+struct Vertex{
+    int id;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
+    g2o::VertexSE2 *vertex;
+
+    Vertex(){};
+    Vertex(int a, pcl::PointCloud<pcl::PointXYZ>::Ptr b, g2o::VertexSE2 *c) {
+        id = a;
+        cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>(*b));
+        vertex = c;
+    }
+};
+
+struct Edge{
+    int id1;
+    int id2;
+    g2o::VertexSE2 *vertex1;
+    g2o::VertexSE2 *vertex2;
+
+    Edge(){}
+    Edge(int a, int b, g2o::VertexSE2 *c, g2o::VertexSE2 *d){
+        id1 = a;
+        id2 = b;
+        vertex1 = c;
+        vertex2 = d;
+    }
+};
 
 class PoseGraphSLAM{
     public:
@@ -66,15 +119,29 @@ class PoseGraphSLAM{
 
         void setupOptimizer();
 
-        static pcl::PointCloud<pcl::PointXYZI>::Ptr align(pcl::Registration<pcl::PointXYZI, pcl::PointXYZI>::Ptr registration, const pcl::PointCloud<pcl::PointXYZI>::Ptr &source, const pcl::PointCloud<pcl::PointXYZI>::Ptr &target, Eigen::Matrix4f &transform);
+        void setupRegisteration(pcl::Registration<pcl::PointXYZ, pcl::PointXYZ>::Ptr registration);
 
-        static pcl::PointCloud<pcl::PointXYZI>::Ptr concatinate(std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> &p);
+        static pcl::PointCloud<pcl::PointXYZ>::Ptr align(pcl::Registration<pcl::PointXYZ, pcl::PointXYZ>::Ptr registration, const pcl::PointCloud<pcl::PointXYZ>::Ptr &source, const pcl::PointCloud<pcl::PointXYZ>::Ptr &target, Eigen::Matrix4f &transform);
+
+        static pcl::PointCloud<pcl::PointXYZ>::Ptr concatinate(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &p);
+
+        void addVertex(int id, Eigen::Matrix4f pose, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, bool fixed);
+
+        void addEdge(int id1, int id2, Eigen::Matrix4f transform, Eigen::Matrix3d informationMatrix);
+
+        void optimize();
+
+        double wrapPi(double angle);
+
+        int isLoopClosurePossible(const int id);
 
         void run();
 
+        void visualize();
+
     private:
-        ros::NodeHandle nh;
-        ros::Publisher mapPub_;
+        ros::NodeHandle nh_;
+        ros::Publisher mapPub_, slamMarkersPub_;
         ros::Subscriber scanSub_;
         laser_geometry::LaserProjection projector_;
         tf2_ros::Buffer tfBuffer_;
@@ -82,10 +149,26 @@ class PoseGraphSLAM{
 
         std::shared_mutex callbackMutex;
 
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud{new pcl::PointCloud<pcl::PointXYZI>()};
-        pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI>::Ptr icp_;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_{new pcl::PointCloud<pcl::PointXYZ>()};
+        pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ>::Ptr icp_{new pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ>};
 
         g2o::SparseOptimizer optimizer_;
+
+        Pose odom_{INT_MAX, INT_MAX, INT_MAX};
+        Pose prevOdom_{INT_MAX, INT_MAX, INT_MAX};
+
+        std::vector<Vertex> allVertex;
+        std::vector<Edge> allEdges_;
+
+        Eigen::Matrix4f pose_ = Eigen::Matrix4f::Identity();
+
+        int id_ = 0;
+
+        bool dataAvailable_ = false;
+        double translationThreshold_ = 0.5;
+        double rotationThreshold_ = 0.5;
+        double loopClosureDistanceThreshold_ = 3.0;
+        int loopClosureMinVerticesThreshold_ = 10;
 };
 
 #endif  //  INCLUDE_POSEGRAPHSLAM_HPP_
