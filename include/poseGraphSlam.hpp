@@ -48,12 +48,23 @@
 #include <g2o/core/optimization_algorithm_levenberg.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
 #include <g2o/types/slam2d/types_slam2d.h>
+#include <g2o/core/robust_kernel_impl.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/registration/icp.h>
+#include <pcl/registration/gicp.h>
 #include <pcl/registration/ndt.h>
-#include <transformation_estimation_2D.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/registration/correspondence_rejection.h>
+
+#include <fast_gicp/gicp/fast_gicp.hpp>
+#include <fast_gicp/gicp/lsq_registration.hpp>
+
+
+#include <pcl/registration/correspondence_rejection_distance.h>
+#include <pcl/registration/correspondence_rejection_median_distance.h>
+#include <pcl/registration/correspondence_rejection_surface_normal.h>
+#include <pcl/registration/correspondence_rejection_sample_consensus.h>
 
 #include <Eigen/Dense>
 
@@ -119,9 +130,7 @@ class PoseGraphSLAM{
 
         void setupOptimizer();
 
-        void setupRegisteration(pcl::Registration<pcl::PointXYZ, pcl::PointXYZ>::Ptr registration);
-
-        static pcl::PointCloud<pcl::PointXYZ>::Ptr align(pcl::Registration<pcl::PointXYZ, pcl::PointXYZ>::Ptr registration, const pcl::PointCloud<pcl::PointXYZ>::Ptr &source, const pcl::PointCloud<pcl::PointXYZ>::Ptr &target, Eigen::Matrix4f &transform);
+        static bool align(fast_gicp::FastGICP<pcl::PointXYZ, pcl::PointXYZ>::Ptr registration, const pcl::PointCloud<pcl::PointXYZ>::Ptr &source, const pcl::PointCloud<pcl::PointXYZ>::Ptr &target, Eigen::Matrix4f &transform, Eigen::Matrix3d &informationMatrix);
 
         static pcl::PointCloud<pcl::PointXYZ>::Ptr concatinate(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> &p);
 
@@ -150,9 +159,10 @@ class PoseGraphSLAM{
         std::shared_mutex callbackMutex;
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_{new pcl::PointCloud<pcl::PointXYZ>()};
-        pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ>::Ptr icp_{new pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ>};
 
         g2o::SparseOptimizer optimizer_;
+        bool useKernel_ = false;
+        double kernelDelta_ = 1.0;
 
         Pose odom_{INT_MAX, INT_MAX, INT_MAX};
         Pose prevOdom_{INT_MAX, INT_MAX, INT_MAX};
@@ -165,10 +175,10 @@ class PoseGraphSLAM{
         int id_ = 0;
 
         bool dataAvailable_ = false;
-        double translationThreshold_ = 0.5;
-        double rotationThreshold_ = 0.5;
-        double loopClosureDistanceThreshold_ = 3.0;
-        int loopClosureMinVerticesThreshold_ = 10;
+        double translationThreshold_ = 1.0;
+        double rotationThreshold_ = 0.2;
+        double loopClosureDistanceThreshold_ = 3.5;
+        int loopClosureMinVerticesThreshold_ = 20;
 };
 
 #endif  //  INCLUDE_POSEGRAPHSLAM_HPP_

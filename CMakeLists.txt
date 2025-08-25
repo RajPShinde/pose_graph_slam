@@ -30,22 +30,23 @@ find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
 find_package(PCL REQUIRED)
 find_package(g2o REQUIRED)
+find_package(fast_gicp REQUIRED)
 
 include_directories(
     include
-    include/impl
     ${catkin_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
     ${Boost_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
     ${G2O_INCLUDE_DIR}
     ${G2O_INCLUDE_DIRS}
+    ${fast_gicp_INCLUDE_DIRS}
 )
 
 link_directories(${G2O_LIBRARY_DIRS})
 
 add_executable(poseGraphSlam src/poseGraphSlam.cpp)
-target_link_libraries(poseGraphSlam ${catkin_LIBRARIES} ${PCL_LIBRARIES}  
+target_link_libraries(poseGraphSlam ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${fast_gicp_LIBRARIES}
   g2o_core
   g2o_stuff
   g2o_types_slam2d
